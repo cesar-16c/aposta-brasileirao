@@ -23,8 +23,9 @@ Bolão do Campeonato Brasileiro entre amigos, em uma única página HTML. Cada p
 
 ## Tecnologia
 
-- HTML, CSS e JavaScript puros, sem frameworks e sem etapa de build, em um único arquivo (`aposta-brasileirao.html`).
-- Dados e login via banco de documentos em tempo real, com as coleções `players`, `rounds` e `bets`.
+- HTML, CSS e JavaScript puros, sem build: `index.html`, `config.js` e `seed.js`.
+- Firebase: login com Google (Authentication) e banco de dados em tempo real (Firestore), com as coleções `players`, `rounds` e `bets`.
+- Hospedagem no GitHub Pages.
 
 ## Estrutura dos dados
 
@@ -34,9 +35,13 @@ Bolão do Campeonato Brasileiro entre amigos, em uma única página HTML. Cada p
 | `rounds` | Número da rodada, jogos com resultado, palpites e ajustes manuais |
 | `bets` | Palpites que cada participante lançou por conta própria |
 
-## Hospedagem
+## Segurança
 
-A versão atual usa o banco de dados e o login da plataforma em que foi publicada. Para hospedar em outro lugar, como GitHub Pages, é preciso trocar essa camada de dados por um serviço próprio, por exemplo Firebase ou Supabase. O restante da página continua igual.
+As regras do Firestore (`firestore.rules`) deixam todos lerem, permitem que só o administrador altere resultados, pontos e rodadas, e que cada participante grave apenas os próprios palpites. A ocultação dos palpites dos outros antes do resultado é feita na tela, não nas regras.
+
+## Como colocar no ar
+
+Veja o `PASSO-A-PASSO.md`: criar o projeto no Firebase, colar as chaves em `config.js` e ativar o GitHub Pages.
 
 ## Licença
 

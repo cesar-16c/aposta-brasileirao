@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'cesar.santos16c@gmail.com';
+    }
+
+    // Ranking e rodadas: todo mundo lê, só o administrador altera.
+    match /players/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /rounds/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Palpites: cada participante grava só o próprio documento (id = uid do login). O administrador grava qualquer um.
+    match /bets/{uid} {
+      allow read: if true;
+      allow create, update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}
