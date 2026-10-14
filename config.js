@@ -1,3 +1,7 @@
+// Preencha com os dados do seu projeto no Firebase (Configurações do projeto > Seus apps > App da Web).
+// Essas chaves não são secretas: quem protege os dados são as regras do Firestore (firestore.rules).
+export const ADMIN_EMAIL = "cesar.santos16c@gmail.com";
+
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 // TODO: Add SDKs for Firebase products that you want to use
