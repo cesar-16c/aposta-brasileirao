@@ -168,15 +168,21 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
     }
     if(!who){picker('Quem é você? Escolha seu nome uma única vez:',function(v){bCol.doc(uid).set({playerId:v});},'Sou eu');g.appendChild(box);return;}
     if(canEdit)picker('Admin: escolha de quem são os palpites.',function(v){editAs=v;renderRounds();});
-    var cur0=betsOf(r,who),ins=[];
+    var cur0=betsOf(r,who),ins=[],saved=!canEdit&&allBets.some(function(bb){return bb.uid===uid&&bb[r.id];});
     (r.games||[]).forEach(function(game,i){
       var row=el('div','bet');row.style.marginTop='6px';row.appendChild(el('span',null,game.home+' x '+game.away));
-      var rr=el('div','res'),a=el('input'),b=el('input'),pv=parse(cur0[i]),lock=!!game.res&&!canEdit;
+      var rr=el('div','res'),a=el('input'),b=el('input'),pv=parse(cur0[i]),lock=saved||(!!game.res&&!canEdit);
       a.type=b.type='number';a.min=b.min='0';if(pv){a.value=pv[0];b.value=pv[1];}
       a.disabled=b.disabled=lock;rr.appendChild(a);rr.appendChild(el('span',null,'x'));rr.appendChild(b);row.appendChild(rr);box.appendChild(row);ins.push([a,b]);
     });
     var sv=el('button','sbtn','Salvar palpites'),w=el('div','res');w.style.marginTop='10px';w.appendChild(sv);box.appendChild(w);
+    if(saved){sv.disabled=true;sv.textContent='Palpites salvos ✓';box.appendChild(el('div','note','Seus palpites desta rodada já foram salvos e não podem mais ser alterados.'));}
     sv.addEventListener('click',function(){
+      if(saved)return;
+      if(!canEdit){
+        if(ins.some(function(x){return x[0].value===''||x[1].value==='';})){alert('Preencha o placar de todos os jogos antes de salvar.');return;}
+        if(!confirm('Depois de salvar, os palpites desta rodada não poderão mais ser alterados. Confirmar?'))return;
+      }
       var arr=ins.map(function(x,i){return(x[0].value!==''&&x[1].value!=='')?(+x[0].value)+'x'+(+x[1].value):(cur0[i]||'');});
       var m=allBets.filter(function(bb){return bb.playerId===who&&bb[r.id];})[0],o={};
       if(canEdit){
