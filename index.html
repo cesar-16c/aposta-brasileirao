@@ -16,7 +16,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-appl
 .nr textarea{min-height:120px}
 .nr button{margin-top:10px;border:0;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer;background:var(--accent);color:#fff}
 .layout{width:100%;max-width:1040px;display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
-@media (min-width:820px){.layout{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}#roundCard,#newRound{grid-column:1;order:1}#rankCard{grid-column:2;grid-row:1/span 2;order:2;align-self:start;position:sticky;top:calc(12px + env(safe-area-inset-top,0px))}}
+@media (min-width:820px){.layout{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}#roundCard,#newRound,#memberCard{grid-column:1;order:1}#rankCard{grid-column:2;grid-row:1/span 3;order:2;align-self:start;position:sticky;top:calc(12px + env(safe-area-inset-top,0px))}}
 .card{width:100%;box-sizing:border-box;background:var(--card);border-radius:20px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.15)}
 .header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
 h1{margin:0;font-size:22px}h2{margin:0;font-size:18px}
@@ -57,6 +57,8 @@ h1{margin:0;font-size:22px}h2{margin:0;font-size:18px}
 .res select{max-width:150px}
 .auth{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .lbtn{border:0;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;background:var(--accent);color:#fff}
+.mem{display:flex;gap:8px;align-items:center;margin-top:8px}.mem span{min-width:90px;font-weight:600;font-size:14px}.mem input{margin-top:0}
+.ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}.ctl button,.ctl input{margin-top:0;width:auto}.ctl .lbtn{padding:7px 10px}
 .sel{background:var(--bg);color:var(--text);border:1px solid var(--row);border-radius:8px;padding:4px 8px;font-size:13px}
 </style>
 </head>
@@ -85,19 +87,32 @@ h1{margin:0;font-size:22px}h2{margin:0;font-size:18px}
   <button id="nrBtn">Criar rodada</button>
   <div class="note" id="nrMsg">Coloque os jogos dos times do grupo e os melhores jogos da rodada (5 no total).</div>
 </div>
+<div class="card nr" id="memberCard" hidden>
+  <h2>👥 Participantes e e-mails</h2>
+  <div class="note">Só quem tem o e-mail Google aprovado aqui consegue ver o bolão e lançar palpites. Você pode aprovar os pedidos ou digitar o e-mail direto.</div>
+  <div class="gh" style="margin-top:12px">📨 Pedidos de acesso</div>
+  <div id="reqList"></div>
+  <div class="gh" style="margin-top:14px">Participantes</div>
+  <div id="memList"></div>
+  <button class="lbtn" id="migBtn" style="margin-top:12px">Migrar palpites antigos</button>
+  <div class="note">Use uma vez: copia para o formato novo os palpites que os participantes salvaram na versão anterior.</div>
+</div>
 </div>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import {getAuth,GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-import {getFirestore,collection,doc,setDoc,updateDoc,deleteDoc,onSnapshot} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+import {getFirestore,collection,doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,deleteField,onSnapshot} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
 (function(){
   var $=function(i){return document.getElementById(i);};
-  var listEl=$('list'),canEdit=false,pCol=null,rCol=null,players=[],rounds=[],cur=null,bCol=null,allBets=[],uid=null,myPid=null,editAs=null;
+  var listEl=$('list'),canEdit=false,pCol=null,rCol=null,players=[],rounds=[],cur=null,bCol=null,allBets=[],uid=null,myPid=null,editAs=null,unsubs=[],loaded={p:0,r:0},reqs=[],reqCol=null;
   function slug(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||('p'+Date.now());}
   function parse(s){var m=/^(\d+)x(\d+)$/.exec(s||'');return m?[+m[1],+m[2]]:null;}
   function score(bet,res){var b=parse(bet),r=parse(res);if(!b||!r)return null;if(b[0]===r[0]&&b[1]===r[1])return 2;return Math.sign(b[0]-b[1])===Math.sign(r[0]-r[1])?1:0;}
-  function betsOf(r,pid){var m=allBets.filter(function(b){return b.playerId===pid&&b[r.id];})[0];return m?m[r.id]:((r.bets||{})[pid]||[]);}
+  function betsOf(r,pid){var m=allBets.filter(function(b){return b.round===r.id&&b.playerId===pid;})[0];return m?m.bets:((r.bets||{})[pid]||[]);}
+  function isClosed(r){return !!r.closed||(!!r.closeAt&&Date.now()>=r.closeAt);}
+  function isRevealed(r){return !!r.revealed||(!!r.revealAt&&Date.now()>=r.revealAt);}
+  function fmt(ms){return new Date(ms).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
   function roundPts(r,pid){var t=(r.adj||{})[pid]||0;(r.games||[]).forEach(function(g,i){var s=score(betsOf(r,pid)[i],g.res);if(s)t+=s;});return t;}
   function total(p){var t=p.points;rounds.forEach(function(r){t+=roundPts(r,p.id);});return t;}
   function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
@@ -115,7 +130,7 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
       if(canEdit){
         var ed=el('div','edit'),inp=el('input');inp.type='number';inp.value=p.points;inp.title='Pontos de antes das rodadas lançadas';
         inp.addEventListener('change',function(){var v=parseInt(inp.value,10);if(isNaN(v)||v===p.points){inp.value=p.points;return;}pCol.doc(p.id).update({points:v,updated:Date.now()}).catch(function(){inp.value=p.points;});});
-        var d=el('button','del','✕');d.addEventListener('click',function(){if(confirm('Remover '+p.name+'?'))pCol.doc(p.id).delete();});
+        var d=el('button','del','✕');d.addEventListener('click',function(){if(confirm('Remover '+p.name+'?')){if(p.email)mCol.doc(p.email.toLowerCase()).delete();pCol.doc(p.id).delete();}});
         ed.appendChild(el('span','pts',x.t+' pts'));ed.appendChild(inp);ed.appendChild(d);row.appendChild(ed);
       }else{var pt=el('div','pts',x.t+' pts');if(lastR){var rp=roundPts(lastR,p.id);if(rp)pt.appendChild(el('small','','+'+rp+' na rodada'));}row.appendChild(pt);}
       listEl.appendChild(row);
@@ -130,7 +145,7 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
     if(!cur||!rounds.some(function(r){return r.id===cur;}))cur=rounds[rounds.length-1].id;
     sel.value=cur;var r=rounds.filter(function(x){return x.id===cur;})[0];
     $('rTitle').textContent='Jogos e palpites';
-    var g=$('games');g.textContent='';
+    var g=$('games');g.textContent='';renderControl(r,g);
     (r.games||[]).forEach(function(game,i){
       var box=el('div','game'),h=el('div','gh');h.appendChild(el('span',null,game.home+' x '+game.away));
       var rs=parse(game.res);
@@ -145,54 +160,73 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
       box.appendChild(h);
       var bets=el('div','bets');
       players.forEach(function(p){
-        var bt=betsOf(r,p.id)[i];if(!bt)return;var s=score(bt,game.res),hide=!canEdit&&!game.res&&p.id!==myPid;
-        var c=el('div','bet'+(s==null?'':' p'+s));c.appendChild(el('span',null,p.name+' '+(hide?'🔒':bt.replace('x','×'))));
-        if(s!=null)c.appendChild(el('b',null,'+'+s));bets.appendChild(c);
+        var bt=betsOf(r,p.id)[i];if(!bt)return;var s=score(bt,game.res),hide=!canEdit&&!(isClosed(r)&&isRevealed(r))&&p.id!==myPid;
+        var c=el('div','bet'+(s==null||hide?'':' p'+s));c.appendChild(el('span',null,p.name+' '+(hide?'🔒':bt.replace('x','×'))));
+        if(s!=null&&!hide)c.appendChild(el('b',null,'+'+s));bets.appendChild(c);
       });
       box.appendChild(bets);g.appendChild(box);
     });
     renderEntry(r,g);
   }
+  function renderControl(r,g){
+    var closed=isClosed(r),rev=closed&&isRevealed(r);
+    var st=el('div','note',(closed?'🔒 Apostas encerradas':'🟢 Apostas abertas')+(r.closeAt&&!r.closed&&!closed?' · encerram em '+fmt(r.closeAt):'')+' · '+(rev?'👁 palpites revelados':'🙈 palpites ocultos')+(r.revealAt&&!rev?' · revelam em '+fmt(r.revealAt):''));
+    st.style.marginBottom='4px';g.appendChild(st);
+    if(!canEdit)return;
+    var box=el('div','game');box.appendChild(el('div','gh','⏱ Controle da rodada'));
+    function btn(txt,fn){var b=el('button','lbtn',txt);b.addEventListener('click',fn);return b;}
+    function err(x){alert('Erro: '+(x&&x.code||x));}
+    var c1=el('div','ctl');
+    c1.appendChild(btn(closed?'Reabrir apostas':'Encerrar apostas agora',function(){rCol.doc(r.id).update(closed?{closed:false,closeAt:deleteField()}:{closed:true}).catch(err);}));
+    var d1=el('input');d1.type='datetime-local';c1.appendChild(d1);
+    c1.appendChild(btn('Programar encerramento',function(){if(!d1.value)return;rCol.doc(r.id).update({closeAt:new Date(d1.value).getTime(),closed:false}).catch(err);}));
+    if(r.closeAt)c1.appendChild(btn('Limpar horário',function(){rCol.doc(r.id).update({closeAt:deleteField()}).catch(err);}));
+    box.appendChild(c1);
+    var c2=el('div','ctl');
+    c2.appendChild(btn(rev?'Ocultar palpites':'Revelar palpites agora',function(){rCol.doc(r.id).update(rev?{revealed:false,revealAt:deleteField()}:{revealed:true}).catch(err);}));
+    var d2=el('input');d2.type='datetime-local';c2.appendChild(d2);
+    c2.appendChild(btn('Programar revelação',function(){if(!d2.value)return;rCol.doc(r.id).update({revealAt:new Date(d2.value).getTime(),revealed:false}).catch(err);}));
+    if(r.revealAt)c2.appendChild(btn('Limpar horário',function(){rCol.doc(r.id).update({revealAt:deleteField()}).catch(err);}));
+    box.appendChild(c2);
+    box.appendChild(el('div','note','Os palpites só aparecem para os participantes depois que as apostas estiverem encerradas e a revelação ativada. O encerramento também é aplicado pelas regras do banco, no horário do servidor.'));
+    g.appendChild(box);
+  }
   function renderEntry(r,g){
     if(!players.length)return;
-    var who=canEdit?(editAs||players[0].id):myPid;
     var box=el('div','game');box.appendChild(el('div','gh','✍️ Palpites'));
-    if(!uid&&!canEdit){box.appendChild(el('div','note','Entre com o Google para lançar seus palpites.'));g.appendChild(box);return;}
-    function picker(txt,fn,btn){
-      var w=el('div','res');w.style.marginTop='8px';var s=el('select','sel');
-      players.forEach(function(p){var o=el('option',null,p.name);o.value=p.id;s.appendChild(o);});
-      if(who)s.value=who;w.appendChild(s);
-      if(btn){var b=el('button','sbtn',btn);b.addEventListener('click',function(){fn(s.value);});w.appendChild(b);}
-      else s.addEventListener('change',function(){fn(s.value);});
-      if(txt)box.appendChild(el('div','note',txt));box.appendChild(w);
+    var closed=isClosed(r);
+    if(!canEdit&&!uid){box.appendChild(el('div','note','Entre com o Google para lançar seus palpites.'));g.appendChild(box);return;}
+    if(!canEdit&&!myPid){box.appendChild(el('div','note','Seu e-mail não está na lista de participantes.'));g.appendChild(box);return;}
+    var who=canEdit?(editAs||players[0].id):myPid;
+    if(canEdit){
+      var pw=el('div','res'),ps=el('select','sel');
+      players.forEach(function(p){var o=el('option',null,p.name);o.value=p.id;ps.appendChild(o);});
+      ps.value=who;ps.addEventListener('change',function(){editAs=ps.value;renderRounds();});
+      box.appendChild(el('div','note','Admin: escolha de quem são os palpites.'));pw.appendChild(ps);box.appendChild(pw);
     }
-    if(!who){picker('Quem é você? Escolha seu nome uma única vez:',function(v){bCol.doc(uid).set({playerId:v});},'Sou eu');g.appendChild(box);return;}
-    if(canEdit)picker('Admin: escolha de quem são os palpites.',function(v){editAs=v;renderRounds();});
-    var cur0=betsOf(r,who),ins=[],saved=!canEdit&&allBets.some(function(bb){return bb.uid===uid&&bb[r.id];});
+    var cur0=betsOf(r,who),ins=[],saved=!canEdit&&allBets.some(function(bb){return bb.round===r.id&&bb.uid===uid;}),lockAll=!canEdit&&(saved||closed);
     (r.games||[]).forEach(function(game,i){
       var row=el('div','bet');row.style.marginTop='6px';row.appendChild(el('span',null,game.home+' x '+game.away));
-      var rr=el('div','res'),a=el('input'),b=el('input'),pv=parse(cur0[i]),lock=saved||(!!game.res&&!canEdit);
+      var rr=el('div','res'),a=el('input'),b=el('input'),pv=parse(cur0[i]);
       a.type=b.type='number';a.min=b.min='0';if(pv){a.value=pv[0];b.value=pv[1];}
-      a.disabled=b.disabled=lock;rr.appendChild(a);rr.appendChild(el('span',null,'x'));rr.appendChild(b);row.appendChild(rr);box.appendChild(row);ins.push([a,b]);
+      a.disabled=b.disabled=lockAll;rr.appendChild(a);rr.appendChild(el('span',null,'x'));rr.appendChild(b);row.appendChild(rr);box.appendChild(row);ins.push([a,b]);
     });
     var sv=el('button','sbtn','Salvar palpites'),w=el('div','res');w.style.marginTop='10px';w.appendChild(sv);box.appendChild(w);
     if(saved){sv.disabled=true;sv.textContent='Palpites salvos ✓';box.appendChild(el('div','note','Seus palpites desta rodada já foram salvos e não podem mais ser alterados.'));}
+    else if(lockAll){sv.disabled=true;sv.textContent='Apostas encerradas';box.appendChild(el('div','note','O período de apostas desta rodada terminou.'));}
     sv.addEventListener('click',function(){
-      if(saved)return;
+      if(lockAll)return;
       if(!canEdit){
         if(ins.some(function(x){return x[0].value===''||x[1].value==='';})){alert('Preencha o placar de todos os jogos antes de salvar.');return;}
         if(!confirm('Depois de salvar, os palpites desta rodada não poderão mais ser alterados. Confirmar?'))return;
       }
       var arr=ins.map(function(x,i){return(x[0].value!==''&&x[1].value!=='')?(+x[0].value)+'x'+(+x[1].value):(cur0[i]||'');});
-      var m=allBets.filter(function(bb){return bb.playerId===who&&bb[r.id];})[0],o={};
+      var done=function(){sv.textContent='Salvo ✓';},fail=function(x){alert('Não foi possível salvar. As apostas podem ter sido encerradas ou os palpites já foram salvos. ('+(x&&x.code||x)+')');};
       if(canEdit){
-        if(m){o[r.id]=arr;bCol.doc(m.uid).update(o);}
-        else{var nb=Object.assign({},r.bets||{});nb[who]=arr;rCol.doc(r.id).update({bets:nb});}
-      }else{
-        var mine=allBets.filter(function(bb){return bb.uid===uid;})[0]||{};
-        var d={playerId:who};Object.keys(mine).forEach(function(k){if(k!=='uid')d[k]=mine[k];});d[r.id]=arr;bCol.doc(uid).set(d);
-      }
-      sv.textContent='Salvo ✓';
+        var m=allBets.filter(function(bb){return bb.round===r.id&&bb.playerId===who;})[0];
+        if(m)bCol.doc(m.docId).set({round:r.id,uid:m.uid,playerId:who,bets:arr,created:m.created||Date.now()}).then(done).catch(fail);
+        else{var nb=Object.assign({},r.bets||{});nb[who]=arr;rCol.doc(r.id).update({bets:nb}).then(done).catch(fail);}
+      }else bCol.doc(r.id+'_'+uid).set({round:r.id,uid:uid,playerId:myPid,bets:arr,created:Date.now()}).then(done).catch(fail);
     });
     g.appendChild(box);
     if(canEdit){
@@ -202,7 +236,45 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
       ab.appendChild(gr);g.appendChild(ab);
     }
   }
-  function renderAll(){renderRank();if(!(document.activeElement&&document.activeElement.tagName==='INPUT'&&$('games').contains(document.activeElement)))renderRounds();}
+  function renderRequests(){
+    var m=$('reqList');m.textContent='';
+    if(!reqs.length){m.appendChild(el('div','note','Nenhum pedido pendente. Quem entrar com o Google sem estar na lista aparece aqui.'));return;}
+    var free=players.filter(function(p){return !p.email;});
+    reqs.forEach(function(q){
+      var row=el('div','mem');row.style.flexWrap='wrap';
+      row.appendChild(el('span',null,(q.name?q.name+' · ':'')+q.email));
+      var sel=el('select','sel'),o0=el('option',null,'Quem é?');o0.value='';sel.appendChild(o0);
+      free.forEach(function(p){var o=el('option',null,p.name);o.value=p.id;sel.appendChild(o);});
+      var ok=el('button','lbtn','Aprovar');
+      ok.addEventListener('click',function(){
+        var p=players.filter(function(x){return x.id===sel.value;})[0];
+        if(!p){alert('Escolha qual participante é essa pessoa.');return;}
+        Promise.all([mCol.doc(q.email).set({playerId:p.id,name:p.name}),pCol.doc(p.id).update({email:q.email})]).then(function(){return reqCol.doc(q.email).delete();}).catch(function(x){alert('Erro: '+(x&&x.code||x));});
+      });
+      var no=el('button','del','Recusar');no.style.cssText='border:0;border-radius:8px;padding:7px 10px;font-weight:700;cursor:pointer';
+      no.addEventListener('click',function(){reqCol.doc(q.email).delete();});
+      row.appendChild(sel);row.appendChild(ok);row.appendChild(no);m.appendChild(row);
+    });
+  }
+  function renderMembers(){
+    var m=$('memList');m.textContent='';
+    players.forEach(function(p){
+      var row=el('div','mem'),inp=el('input');row.appendChild(el('span',null,p.name));
+      inp.type='email';inp.placeholder='e-mail do Google';inp.value=p.email||'';
+      inp.addEventListener('change',function(){
+        var e=inp.value.trim().toLowerCase(),old=(p.email||'').toLowerCase();
+        if(e&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){alert('E-mail inválido.');inp.value=p.email||'';return;}
+        if(e&&players.some(function(q){return q.id!==p.id&&(q.email||'').toLowerCase()===e;})){alert('Esse e-mail já está em outro participante.');inp.value=p.email||'';return;}
+        var ops=[];
+        if(old&&old!==e)ops.push(mCol.doc(old).delete());
+        if(e)ops.push(mCol.doc(e).set({playerId:p.id,name:p.name}));
+        ops.push(pCol.doc(p.id).update({email:e}));
+        Promise.all(ops).catch(function(x){alert('Erro ao salvar: '+(x&&x.code||x));});
+      });
+      row.appendChild(inp);m.appendChild(row);
+    });
+  }
+  function renderAll(){renderRank();if(canEdit&&!(document.activeElement&&$('memberCard').contains(document.activeElement))){renderMembers();renderRequests();}if(!(document.activeElement&&document.activeElement.tagName==='INPUT'&&$('games').contains(document.activeElement)))renderRounds();}
   $('rSel').addEventListener('change',function(){cur=this.value;renderRounds();});
   $('nrBtn').addEventListener('click',function(){
     var n=parseInt($('nrNum').value,10),msg=$('nrMsg');
@@ -214,23 +286,40 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
   });
   $('addBtn').addEventListener('click',function(){var e=$('newName'),n=e.value.trim();if(!n||!pCol)return;pCol.doc(slug(n)).set({name:n,points:0,updated:Date.now()}).then(function(){e.value='';});});
   var fapp=initializeApp(firebaseConfig),fdb=getFirestore(fapp),auth=getAuth(fapp);
-  var defNote=$('note').textContent;
+  var defNote=$('note').textContent,mCol;
   function wrap(name){return{
     doc:function(id){var r=doc(fdb,name,id);return{set:function(d){return setDoc(r,d);},update:function(d){return updateDoc(r,d);},delete:function(){return deleteDoc(r);}};},
     onSnapshot:function(ok,err){return onSnapshot(collection(fdb,name),ok,err);}};}
-  pCol=wrap('players');rCol=wrap('rounds');bCol=wrap('bets');
-  function seedVis(){$('seedBtn').hidden=!(canEdit&&!players.length&&!rounds.length);}
-  function applyAuth(u){
-    uid=u?u.uid:null;
+  pCol=wrap('players');rCol=wrap('rounds');bCol=wrap('palpites');mCol=wrap('members');reqCol=wrap('requests');
+  function seedVis(){$('seedBtn').hidden=!(canEdit&&loaded.p&&loaded.r&&!players.length&&!rounds.length);}
+  function stop(){unsubs.forEach(function(f){try{f();}catch(e){}});unsubs=[];players=[];rounds=[];allBets=[];reqs=[];loaded={p:0,r:0};}
+  function showMsg(t){listEl.textContent='';listEl.appendChild(el('div','empty',t));$('roundCard').hidden=true;$('seedBtn').hidden=true;}
+  function start(){
+    var bad=function(){showMsg('Não foi possível carregar os dados. Confira se o seu e-mail está na lista de participantes.');};
+    unsubs.push(pCol.onSnapshot(function(s){loaded.p=1;players=s.docs.map(function(d){var x=d.data()||{};return{id:d.id,name:String(x.name||d.id),team:x.team||'',email:x.email||'',points:Number(x.points)||0,updated:x.updated||0};});renderAll();seedVis();},bad));
+    unsubs.push(rCol.onSnapshot(function(s){loaded.r=1;rounds=s.docs.map(function(d){var x=d.data()||{};return{id:d.id,number:x.number||0,games:x.games||[],bets:x.bets||{},adj:x.adj||{},closed:!!x.closed,closeAt:x.closeAt||0,revealed:!!x.revealed,revealAt:x.revealAt||0};}).sort(function(a,b){return a.number-b.number;});renderAll();seedVis();},function(){}));
+    if(canEdit)unsubs.push(reqCol.onSnapshot(function(s){reqs=s.docs.map(function(d){var x=d.data()||{};return{email:d.id,name:x.name||''};});renderRequests();},function(){}));
+    unsubs.push(bCol.onSnapshot(function(s){allBets=s.docs.map(function(d){var x=d.data()||{};return{docId:d.id,round:x.round,uid:x.uid,playerId:x.playerId,bets:x.bets||[],created:x.created||0};});renderAll();},function(){}));
+  }
+  async function applyAuth(u){
+    stop();uid=u?u.uid:null;myPid=null;
     canEdit=!!u&&!!u.email&&u.email.toLowerCase()===ADMIN_EMAIL.toLowerCase();
     $('who').textContent=u?(u.displayName||u.email):'';
     $('loginBtn').textContent=u?'Sair':'Entrar com Google';
-    $('add').hidden=!canEdit;$('newRound').hidden=!canEdit;
-    $('role').textContent=canEdit?'Administrador':(u?'Participante':'Somente leitura');
+    $('add').hidden=!canEdit;$('newRound').hidden=!canEdit;$('memberCard').hidden=!canEdit;
     $('role').className='badge'+(canEdit?' admin':'');
     $('note').textContent=canEdit?'Admin: lance o resultado de cada jogo e os pontos são calculados sozinhos. O campo ao lado de cada nome são os pontos de antes das rodadas lançadas.':defNote;
-    var me=allBets.filter(function(b){return b.uid===uid;})[0];myPid=me?me.playerId:null;
-    renderAll();seedVis();
+    if(!u){$('role').textContent='Visitante';showMsg('Entre com o Google para ver o bolão. Só participantes cadastrados têm acesso.');return;}
+    if(canEdit){$('role').textContent='Administrador';start();return;}
+    try{var sn=await getDoc(doc(fdb,'members',u.email.toLowerCase()));if(sn.exists())myPid=sn.data().playerId;}catch(e){}
+    if(!myPid){
+      $('role').textContent='Sem acesso';
+      setDoc(doc(fdb,'requests',u.email.toLowerCase()),{email:u.email.toLowerCase(),name:u.displayName||'',created:Date.now()})
+        .then(function(){showMsg('Seu pedido de acesso foi enviado ao administrador ('+u.email+'). Volte depois que ele aprovar.');})
+        .catch(function(){showMsg('O e-mail '+u.email+' não está na lista de participantes. Fale com o administrador.');});
+      return;
+    }
+    $('role').textContent='Participante';start();
   }
   $('loginBtn').addEventListener('click',function(){
     if(auth.currentUser)signOut(auth);else signInWithPopup(auth,new GoogleAuthProvider()).catch(function(e){alert('Não foi possível entrar: '+(e&&e.code?e.code:e));});
@@ -243,10 +332,16 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
       return Promise.all(ps);
     }).then(function(){$('seedBtn').hidden=true;}).catch(function(e){alert('Erro ao carregar os dados: '+(e&&e.code?e.code:e));});
   });
-  bCol.onSnapshot(function(s){allBets=s.docs.map(function(d){var x=Object.assign({},d.data()||{});x.uid=d.id;return x;});var me=allBets.filter(function(b){return b.uid===uid;})[0];myPid=me?me.playerId:null;renderAll();},function(){});
-  pCol.onSnapshot(function(s){players=s.docs.map(function(d){var x=d.data()||{};return{id:d.id,name:String(x.name||d.id),team:x.team||'',points:Number(x.points)||0,updated:x.updated||0};});renderAll();seedVis();},
-    function(){listEl.innerHTML='<div class="empty">Não foi possível carregar o ranking.</div>';});
-  rCol.onSnapshot(function(s){rounds=s.docs.map(function(d){var x=d.data()||{};return{id:d.id,number:x.number||0,games:x.games||[],bets:x.bets||{},adj:x.adj||{}};}).sort(function(a,b){return a.number-b.number;});renderAll();seedVis();},function(){});
+  $('migBtn').addEventListener('click',function(){
+    getDocs(collection(fdb,'bets')).then(function(snap){
+      var ops=[],n=0;
+      snap.forEach(function(d){var x=d.data()||{};Object.keys(x).forEach(function(k){
+        if(/^r\d+$/.test(k)&&Array.isArray(x[k])&&x.playerId){n++;ops.push(bCol.doc(k+'_'+d.id).set({round:k,uid:d.id,playerId:x.playerId,bets:x[k],created:Date.now()}));}
+      });});
+      return Promise.all(ops).then(function(){alert(n?('Palpites migrados: '+n+'.'):'Nenhum palpite antigo encontrado.');});
+    }).catch(function(x){alert('Erro ao migrar: '+(x&&x.code||x));});
+  });
+  setInterval(renderAll,30000);
   onAuthStateChanged(auth,applyAuth);
 })();
 </script>
