@@ -240,17 +240,20 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
   function renderRequests(){
     var m=$('reqList');m.textContent='';
     if(!reqs.length){m.appendChild(el('div','note','Nenhum pedido pendente. Quem entrar com o Google sem estar na lista aparece aqui.'));return;}
-    var free=players.filter(function(p){return !p.email;});
+    var free=players.slice().sort(function(a,b){return a.name.localeCompare(b.name);});
     reqs.forEach(function(q){
       var row=el('div','mem');row.style.flexWrap='wrap';
       row.appendChild(el('span',null,(q.name?q.name+' · ':'')+q.email));
       var sel=el('select','sel'),o0=el('option',null,'Quem é?');o0.value='';sel.appendChild(o0);
-      free.forEach(function(p){var o=el('option',null,p.name);o.value=p.id;sel.appendChild(o);});
+      free.forEach(function(p){var o=el('option',null,p.name+(p.email?' (já tem e-mail)':''));o.value=p.id;sel.appendChild(o);});
       var ok=el('button','lbtn','Aprovar');
       ok.addEventListener('click',function(){
         var p=players.filter(function(x){return x.id===sel.value;})[0];
         if(!p){alert('Escolha qual participante é essa pessoa.');return;}
-        Promise.all([mCol.doc(q.email).set({playerId:p.id,name:p.name}),pCol.doc(p.id).update({email:q.email})]).then(function(){return reqCol.doc(q.email).delete();}).catch(function(x){alert('Erro: '+(x&&x.code||x));});
+        var ops=[];
+        if(p.email&&p.email.toLowerCase()!==q.email){if(!confirm(p.name+' já está ligado a '+p.email+'. Trocar para '+q.email+'?'))return;ops.push(mCol.doc(p.email.toLowerCase()).delete());}
+        ops.push(mCol.doc(q.email).set({playerId:p.id,name:p.name}));ops.push(pCol.doc(p.id).update({email:q.email}));
+        Promise.all(ops).then(function(){return reqCol.doc(q.email).delete();}).catch(function(x){alert('Erro: '+(x&&x.code||x));});
       });
       var no=el('button','del','Recusar');no.style.cssText='border:0;border-radius:8px;padding:7px 10px;font-weight:700;cursor:pointer';
       no.addEventListener('click',function(){reqCol.doc(q.email).delete();});
