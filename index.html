@@ -105,13 +105,14 @@ import {getFirestore,collection,doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,de
 import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
 (function(){
   var $=function(i){return document.getElementById(i);};
-  var listEl=$('list'),canEdit=false,pCol=null,rCol=null,players=[],rounds=[],cur=null,bCol=null,allBets=[],uid=null,myPid=null,editAs=null,unsubs=[],loaded={p:0,r:0},reqs=[],reqCol=null;
+  var listEl=$('list'),canEdit=false,pCol=null,rCol=null,players=[],rounds=[],cur=null,bCol=null,allBets=[],uid=null,myPid=null,editAs=null,unsubs=[],loaded={p:0,r:0},reqs=[],reqCol=null,picked=false;
   function slug(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||('p'+Date.now());}
   function parse(s){var m=/^(\d+)x(\d+)$/.exec(s||'');return m?[+m[1],+m[2]]:null;}
   function score(bet,res){var b=parse(bet),r=parse(res);if(!b||!r)return null;if(b[0]===r[0]&&b[1]===r[1])return 2;return Math.sign(b[0]-b[1])===Math.sign(r[0]-r[1])?1:0;}
   function betsOf(r,pid){var m=allBets.filter(function(b){return b.round===r.id&&b.playerId===pid;})[0];return m?m.bets:((r.bets||{})[pid]||[]);}
   function isClosed(r){return !!r.closed||(!!r.closeAt&&Date.now()>=r.closeAt);}
   function isRevealed(r){return !!r.revealed||(!!r.revealAt&&Date.now()>=r.revealAt);}
+  function currentRound(){var u=rounds.filter(function(r){return (r.games||[]).some(function(g){return !g.res;});})[0];return u||rounds[rounds.length-1]||null;}
   function fmt(ms){return new Date(ms).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
   function roundPts(r,pid){var t=(r.adj||{})[pid]||0;(r.games||[]).forEach(function(g,i){var s=score(betsOf(r,pid)[i],g.res);if(s)t+=s;});return t;}
   function total(p){var t=p.points;rounds.forEach(function(r){t+=roundPts(r,p.id);});return t;}
@@ -142,7 +143,7 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
     $('roundCard').hidden=!rounds.length;if(!rounds.length)return;
     var sel=$('rSel');sel.textContent='';
     rounds.forEach(function(r){var o=el('option',null,r.number+'ª rodada');o.value=r.id;sel.appendChild(o);});
-    if(!cur||!rounds.some(function(r){return r.id===cur;}))cur=rounds[rounds.length-1].id;
+    if(!picked||!rounds.some(function(r){return r.id===cur;}))cur=currentRound().id;
     sel.value=cur;var r=rounds.filter(function(x){return x.id===cur;})[0];
     $('rTitle').textContent='Jogos e palpites';
     var g=$('games');g.textContent='';renderControl(r,g);
@@ -204,7 +205,7 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
       ps.value=who;ps.addEventListener('change',function(){editAs=ps.value;renderRounds();});
       box.appendChild(el('div','note','Admin: escolha de quem são os palpites.'));pw.appendChild(ps);box.appendChild(pw);
     }
-    var cur0=betsOf(r,who),ins=[],saved=!canEdit&&allBets.some(function(bb){return bb.round===r.id&&bb.uid===uid;}),lockAll=!canEdit&&(saved||closed);
+    var cur0=betsOf(r,who),ins=[],saved=!canEdit&&allBets.some(function(bb){return bb.round===r.id&&bb.uid===uid;}),curR=currentRound(),isCur=!!curR&&curR.id===r.id,lockAll=!canEdit&&(saved||closed||!isCur);
     (r.games||[]).forEach(function(game,i){
       var row=el('div','bet');row.style.marginTop='6px';row.appendChild(el('span',null,game.home+' x '+game.away));
       var rr=el('div','res'),a=el('input'),b=el('input'),pv=parse(cur0[i]);
@@ -213,7 +214,7 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
     });
     var sv=el('button','sbtn','Salvar palpites'),w=el('div','res');w.style.marginTop='10px';w.appendChild(sv);box.appendChild(w);
     if(saved){sv.disabled=true;sv.textContent='Palpites salvos ✓';box.appendChild(el('div','note','Seus palpites desta rodada já foram salvos e não podem mais ser alterados.'));}
-    else if(lockAll){sv.disabled=true;sv.textContent='Apostas encerradas';box.appendChild(el('div','note','O período de apostas desta rodada terminou.'));}
+    else if(lockAll){sv.disabled=true;sv.textContent=closed?'Apostas encerradas':'Rodada não atual';box.appendChild(el('div','note',closed?'O período de apostas desta rodada terminou.':'Só é possível lançar palpites na rodada atual ('+(curR?curR.number:'')+'ª).'));}
     sv.addEventListener('click',function(){
       if(lockAll)return;
       if(!canEdit){
@@ -275,7 +276,7 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
     });
   }
   function renderAll(){renderRank();if(canEdit&&!(document.activeElement&&$('memberCard').contains(document.activeElement))){renderMembers();renderRequests();}if(!(document.activeElement&&document.activeElement.tagName==='INPUT'&&$('games').contains(document.activeElement)))renderRounds();}
-  $('rSel').addEventListener('change',function(){cur=this.value;renderRounds();});
+  $('rSel').addEventListener('change',function(){cur=this.value;picked=true;renderRounds();});
   $('nrBtn').addEventListener('click',function(){
     var n=parseInt($('nrNum').value,10),msg=$('nrMsg');
     var gs=$('nrGames').value.split('\n').map(function(l){return l.trim();}).filter(Boolean).map(function(l){var m=l.split(/\s+[xX×]\s+/);return m.length===2&&m[0]&&m[1]?{home:m[0].trim(),away:m[1].trim(),res:''}:null;});
@@ -302,7 +303,7 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
     unsubs.push(bCol.onSnapshot(function(s){allBets=s.docs.map(function(d){var x=d.data()||{};return{docId:d.id,round:x.round,uid:x.uid,playerId:x.playerId,bets:x.bets||[],created:x.created||0};});renderAll();},function(){}));
   }
   async function applyAuth(u){
-    stop();uid=u?u.uid:null;myPid=null;
+    stop();uid=u?u.uid:null;myPid=null;picked=false;cur=null;
     canEdit=!!u&&!!u.email&&u.email.toLowerCase()===ADMIN_EMAIL.toLowerCase();
     $('who').textContent=u?(u.displayName||u.email):'';
     $('loginBtn').textContent=u?'Sair':'Entrar com Google';
