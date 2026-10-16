@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Aposta Brasileirão</title>
-<meta name="theme-color" content="#2563eb">
+<meta name="theme-color" content="#1e293b">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -13,9 +13,9 @@
 <meta name="apple-mobile-web-app-title" content="Aposta BR">
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
---bg:#f1f5f9;--card:#fff;--row:#e2e8f0;--text:#0f172a;--muted:#64748b;--chip:rgba(0,0,0,.08);--accent:#2563eb;--danger:#dc2626;--p2:#2563eb;--p1:#d97706;--p0:#94a3b8}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0b1220;--card:#1e293b;--row:#334155;--text:#f8fafc;--muted:#94a3b8;--chip:rgba(0,0,0,.25)}}
-:root[data-theme="dark"]{color-scheme:dark;--bg:#0b1220;--card:#1e293b;--row:#334155;--text:#f8fafc;--muted:#94a3b8;--chip:rgba(0,0,0,.25)}
+--bg:#f1f5f9;--card:#fff;--row:#e2e8f0;--text:#0f172a;--muted:#64748b;--chip:rgba(0,0,0,.08);--accent:#1e293b;--danger:#dc2626;--p2:#334155;--p1:#d97706;--p0:#94a3b8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--accent:#3b4f7a;--p2:#475a82;color-scheme:dark;--bg:#0b1220;--card:#1e293b;--row:#334155;--text:#f8fafc;--muted:#94a3b8;--chip:rgba(0,0,0,.25)}}
+:root[data-theme="dark"]{--accent:#3b4f7a;--p2:#475a82;color-scheme:dark;--bg:#0b1220;--card:#1e293b;--row:#334155;--text:#f8fafc;--muted:#94a3b8;--chip:rgba(0,0,0,.25)}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;gap:16px;padding:20px 14px}
 .nr input,.nr textarea{width:100%;box-sizing:border-box;padding:9px;margin-top:8px;border-radius:8px;border:1px solid var(--row);background:var(--bg);color:var(--text);font-size:15px;font-family:inherit}
@@ -31,9 +31,9 @@ h1{margin:0;font-size:22px}h2{margin:0;font-size:18px}
 .badge.admin{background:var(--accent);color:#fff}
 .list{display:flex;flex-direction:column;gap:8px}
 .row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-radius:12px;background:var(--row);font-weight:600;font-size:15px}
-.row.r1{background:linear-gradient(90deg,#b45309,#d97706);color:#fff;box-shadow:0 4px 12px rgba(217,119,6,.3)}
-.row.r2{background:linear-gradient(90deg,#475569,#64748b);color:#fff}
-.row.r3{background:linear-gradient(90deg,#7c2d12,#9a3412);color:#fff}
+.row.r1{background:linear-gradient(90deg,#b8860b,#e0b43a);color:#fff;box-shadow:0 4px 12px rgba(184,134,11,.35)}
+.row.r2{background:linear-gradient(90deg,#6b7280,#a3aab5);color:#fff}
+.row.r3{background:linear-gradient(90deg,#8a5a2b,#b87333);color:#fff}
 .rn{display:flex;align-items:center;gap:12px;min-width:0}
 .rank{flex:none;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-weight:800;font-size:13px;background:var(--chip)}
 .nm{display:flex;flex-direction:column;min-width:0}
