@@ -4,10 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Aposta Brasileirão</title>
-<meta name="theme-color" content="#16a34a">
+<meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Aposta BR">
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
---bg:#f1f5f9;--card:#fff;--row:#e2e8f0;--text:#0f172a;--muted:#64748b;--chip:rgba(0,0,0,.08);--accent:#16a34a;--danger:#dc2626;--p2:#16a34a;--p1:#d97706;--p0:#94a3b8}
+--bg:#f1f5f9;--card:#fff;--row:#e2e8f0;--text:#0f172a;--muted:#64748b;--chip:rgba(0,0,0,.08);--accent:#2563eb;--danger:#dc2626;--p2:#2563eb;--p1:#d97706;--p0:#94a3b8}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0b1220;--card:#1e293b;--row:#334155;--text:#f8fafc;--muted:#94a3b8;--chip:rgba(0,0,0,.25)}}
 :root[data-theme="dark"]{color-scheme:dark;--bg:#0b1220;--card:#1e293b;--row:#334155;--text:#f8fafc;--muted:#94a3b8;--chip:rgba(0,0,0,.25)}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -347,6 +353,7 @@ import {firebaseConfig,ADMIN_EMAIL} from "./config.js";
   });
   setInterval(renderAll,30000);
   onAuthStateChanged(auth,applyAuth);
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){});
 })();
 </script>
 </body>
