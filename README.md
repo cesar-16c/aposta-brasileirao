@@ -45,4 +45,4 @@ Veja o `PASSO-A-PASSO.md`: criar o projeto no Firebase, colar as chaves em `conf
 
 ## Licença
 
-Projeto pessoal, de uso entre amigos. Defina aqui a licença que preferir.
+Projeto pessoal, de uso entre amigos.
